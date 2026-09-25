@@ -47,6 +47,24 @@ Outputs: `breaking`, `deprecation`, `unknown`, `findings` (count) and
 `report-json`. Each breaking finding is also emitted as a workflow error
 annotation, and the full table lands in the job summary.
 
+## Without a CI job
+
+The same check runs from a terminal:
+
+```
+npx apibreak check --manifest apibreak.json
+```
+
+Or add it to a project with `npm i -D apibreak`. The package is one bundled
+file, a README and a licence — **no dependencies**, **no install scripts** —
+and it needs Node 20 or newer. It is early access at
+[`apibreak@0.1.0`](https://www.npmjs.com/package/apibreak), two vendors, and
+the interface may still change.
+
+The Action wraps this same check and adds the annotations and job summary
+above. Everything below — the manifest, what is detected, the exit codes —
+is the same either way.
+
 ## `apibreak.json`
 
 ```json
@@ -166,10 +184,11 @@ threshold except `never`; `not compared` and `advisory` findings never fail.
 
 ## Status
 
-Early access, and honestly labelled as such: the Action and CLI are free and
-always will be. A hosted version that emails you a weekly report without a CI
-job is proposed at $49/org/month — [apibreak.dev](https://apibreak.dev) has the
-worked example and the detail. No SLA, no real-time protection, and no claim of
-complete coverage is offered anywhere.
+Early access, and honestly labelled as such: the Action and the CLI — published
+on npm as [`apibreak@0.1.0`](https://www.npmjs.com/package/apibreak) — are free
+and always will be. A hosted version that emails you a weekly report without a
+CI job is proposed at $49/org/month — [apibreak.dev](https://apibreak.dev) has
+the worked example and the detail. No SLA, no real-time protection, and no
+claim of complete coverage is offered anywhere.
 
 `dist/index.js` is the committed bundle the Action runs. MIT licensed.
