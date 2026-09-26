@@ -188,6 +188,17 @@ function renderMarkdown(report) {
       );
     }
     lines.push("");
+    for (const finding of sortFindings(report.findings)) {
+      if (finding.paths === void 0 || finding.paths.length <= 3) continue;
+      lines.push(
+        `<details><summary>${escapeHtml(`${finding.vendor} ${finding.endpoint} ${finding.at ?? ""}`)}: ${finding.paths.length} fields not compared</summary>`
+      );
+      lines.push("");
+      lines.push(finding.paths.map((p) => `\`${escapeCell(p === "" ? "(root)" : p)}\``).join(", "));
+      lines.push("");
+      lines.push("</details>");
+      lines.push("");
+    }
   }
   lines.push("### Sources");
   lines.push("");
@@ -210,6 +221,9 @@ function exitCode(report, failOn) {
     if (SEVERITY_ORDER[finding.severity] <= threshold) return 2;
   }
   return 0;
+}
+function escapeHtml(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 // radar/src/spec.ts
@@ -273,6 +287,7 @@ function stableKey(value) {
     return "[unserialisable]";
   }
 }
+var UNION_REFUSAL = "an anyOf/oneOf union, which this check does not compare";
 function emptyShape() {
   return { fields: /* @__PURE__ */ new Map(), opaque: /* @__PURE__ */ new Set(), unknowns: /* @__PURE__ */ new Map() };
 }
@@ -292,7 +307,7 @@ function mergeInto(target, schema, doc, path, out, depth) {
   const node = resolved.node;
   if (!node || typeof node !== "object" || Array.isArray(node)) return true;
   if (Array.isArray(node.anyOf) || Array.isArray(node.oneOf)) {
-    out.unknowns.set(path, "an anyOf/oneOf union, which this check does not compare");
+    out.unknowns.set(path, UNION_REFUSAL);
     return false;
   }
   if (Array.isArray(node.allOf)) {
@@ -498,10 +513,19 @@ function diffEndpoints(input2) {
   let checked = 0;
   let skipped = 0;
   let additive = 0;
-  const emit = (kind, severity, endpoint, detail, at) => {
-    findings.push(
-      at === void 0 ? { kind, severity, vendor: vendor2, endpoint, detail } : { kind, severity, vendor: vendor2, endpoint, detail, at }
-    );
+  const emit = (kind, severity, endpoint, detail, at, paths) => {
+    findings.push({
+      kind,
+      severity,
+      vendor: vendor2,
+      endpoint,
+      detail,
+      ...at === void 0 ? {} : { at },
+      // Only the grouped-refusal branch sets `paths`, and findings without it
+      // carry no key at all — not `undefined`, not an empty array — so the
+      // JSON for every other finding stays byte-identical.
+      ...paths === void 0 ? {} : { paths }
+    });
   };
   const unreadable = baseline.unreadable ?? current.unreadable;
   if (unreadable) {
@@ -537,13 +561,24 @@ function diffEndpoints(input2) {
           "not_compared",
           endpoint,
           `${tops.length} fields were not compared in the ${group.side} \u2014 ${group.why} \u2014 at ${examples}${tops.length > 3 ? " and elsewhere" : ""}`,
-          at
+          at,
+          // The detail keeps naming three examples; `paths` is the full
+          // sorted list (`tops` is already sorted), so the report can be held
+          // to every refused field rather than the first three.
+          [...tops]
         );
       }
     }
     const isRefused = (path) => {
       for (const root of refusals.keys()) if (under(path, root)) return true;
       return false;
+    };
+    const hiddenFromRemoval = (path) => {
+      for (const [root, refusal] of refusals) {
+        if (!under(path, root)) continue;
+        if (root !== path || refusal.why !== UNION_REFUSAL || path.endsWith("[]")) return true;
+      }
+      return b.unknowns.has(path);
     };
     const opaqueIn = (shape, path) => {
       for (const root of shape.opaque) if (root !== path && under(path, root)) return root;
@@ -552,7 +587,7 @@ function diffEndpoints(input2) {
     const removed = [];
     const stoppedEnumerating = /* @__PURE__ */ new Set();
     for (const path of a.fields.keys()) {
-      if (isRefused(path)) continue;
+      if (hiddenFromRemoval(path)) continue;
       if (b.fields.has(path)) continue;
       const blob = opaqueIn(b, path);
       if (blob !== null) {

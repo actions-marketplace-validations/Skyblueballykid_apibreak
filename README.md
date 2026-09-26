@@ -45,7 +45,10 @@ jobs:
 
 Outputs: `breaking`, `deprecation`, `unknown`, `findings` (count) and
 `report-json`. Each breaking finding is also emitted as a workflow error
-annotation, and the full table lands in the job summary.
+annotation, and the full table lands in the job summary. Grouped `not compared`
+findings in `report-json` also carry `paths`, the full sorted list of the fields
+not compared (relative to `at`) — the detail line itself still names only three
+examples.
 
 ## Without a CI job
 
