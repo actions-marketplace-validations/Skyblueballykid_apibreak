@@ -132,7 +132,9 @@ counted in the summary and never listed. They are not your problem.
 - **It does not read your code.** Nothing is scanned, no repository access
   beyond the checkout your workflow already has, no credentials, no traffic,
   nothing uploaded anywhere. The `github-token` input is optional and only
-  raises the rate limit on the two public commit listings it reads.
+  raises the rate limit on the two public commit listings it reads. Every
+  request has a 30 s stall deadline and a 5 minute ceiling, and a request that
+  times out is reported as `unknown` rather than hanging the job.
 - **It does not guess.** `anyOf`/`oneOf` is a genuine ambiguity — two schemas
   where a field is required in one branch and absent in the other cannot be
   compared without inventing an answer — so it is reported as `not compared`

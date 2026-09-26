@@ -878,6 +878,84 @@ function mediaAt(at, contentType, alternatives) {
 }
 
 // radar/src/fetch.ts
+var DEFAULT_DEADLINES = {
+  stallMs: 3e4,
+  totalMs: 3e5
+};
+function formatDuration(ms) {
+  return ms < 1e3 ? `${ms} ms` : `${Math.round(ms / 1e3)} s`;
+}
+function httpOk(status) {
+  return status >= 200 && status < 300;
+}
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return void 0;
+  }
+}
+async function getBody(url, init, deps) {
+  const deadlines = deps.deadlines ?? DEFAULT_DEADLINES;
+  const controller = new AbortController();
+  let stalled = false;
+  let exhausted = false;
+  let stallTimer;
+  const armStall = () => {
+    clearTimeout(stallTimer);
+    stalled = false;
+    stallTimer = setTimeout(() => {
+      stalled = true;
+      controller.abort();
+    }, deadlines.stallMs);
+  };
+  const totalTimer = setTimeout(() => {
+    exhausted = true;
+    controller.abort();
+  }, deadlines.totalMs);
+  try {
+    armStall();
+    const res = await deps.fetch(url, { ...init, signal: controller.signal });
+    armStall();
+    let text;
+    if (!res.body) {
+      if (typeof res.text === "function") {
+        text = await res.text();
+      } else {
+        text = JSON.stringify(await res.json());
+      }
+    } else {
+      const decoder = new TextDecoder();
+      const parts = [];
+      const reader = res.body.getReader();
+      try {
+        for (; ; ) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          armStall();
+          parts.push(decoder.decode(value, { stream: true }));
+        }
+        parts.push(decoder.decode());
+      } finally {
+        void reader.cancel().catch(() => void 0);
+      }
+      text = parts.join("");
+    }
+    return { ok: true, status: res.status, text };
+  } catch (e) {
+    if (!controller.signal.aborted) controller.abort();
+    if (exhausted) {
+      return { ok: false, error: `${url} did not finish within ${formatDuration(deadlines.totalMs)}` };
+    }
+    if (stalled) {
+      return { ok: false, error: `no response from ${url} for ${formatDuration(deadlines.stallMs)}` };
+    }
+    return { ok: false, error: `could not reach ${url}: ${e.message}` };
+  } finally {
+    clearTimeout(stallTimer);
+    clearTimeout(totalTimer);
+  }
+}
 var SHA_RE = /^[0-9a-f]{7,40}$/i;
 var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 async function resolveRevision(source, baseline, deps) {
@@ -892,16 +970,12 @@ async function resolveRevision(source, baseline, deps) {
   const url = `https://api.github.com/repos/${source.repo}/commits?path=${encodeURIComponent(
     source.path
   )}&per_page=1&until=${until}`;
-  let res;
-  try {
-    res = await deps.fetch(url, { headers: headers(deps) });
-  } catch (e) {
-    return { error: `could not reach the ${source.repo} commit listing: ${e.message}` };
-  }
-  if (!res.ok) {
+  const res = await getBody(url, { headers: headers(deps) }, deps);
+  if (!res.ok) return { error: res.error };
+  if (!httpOk(res.status)) {
     return { error: `could not list ${source.repo} commits (HTTP ${res.status})` };
   }
-  const body = await readJson(res);
+  const body = parseJson(res.text);
   if (!Array.isArray(body) || body.length === 0) {
     return { error: `no commit to ${source.path} on or before ${baseline}` };
   }
@@ -918,23 +992,14 @@ function commitFrom(entry) {
   const date = typeof author?.date === "string" ? author.date : void 0;
   return { ref: e.sha, stamp: { commit: e.sha, date } };
 }
-async function readJson(res) {
-  try {
-    return await res.json();
-  } catch {
-    return void 0;
-  }
-}
 async function commitMeta(source, sha, deps) {
-  try {
-    const res = await deps.fetch(`https://api.github.com/repos/${source.repo}/commits/${sha}`, {
-      headers: headers(deps)
-    });
-    if (!res.ok) return void 0;
-    return { date: commitFrom(await readJson(res))?.stamp.date };
-  } catch {
-    return void 0;
-  }
+  const res = await getBody(
+    `https://api.github.com/repos/${source.repo}/commits/${sha}`,
+    { headers: headers(deps) },
+    deps
+  );
+  if (!res.ok || !httpOk(res.status)) return void 0;
+  return { date: commitFrom(parseJson(res.text))?.stamp.date };
 }
 function headers(deps) {
   const h = {
@@ -946,16 +1011,12 @@ function headers(deps) {
 }
 async function fetchSpec(source, revision, deps) {
   const url = source.rawUrl(revision.ref);
-  let res;
-  try {
-    res = await deps.fetch(url, { headers: { "user-agent": "apibreak" } });
-  } catch (e) {
-    return { error: `could not reach ${url}: ${e.message}` };
-  }
-  if (!res.ok) return { error: `could not fetch ${url} (HTTP ${res.status})` };
+  const res = await getBody(url, { headers: { "user-agent": "apibreak" } }, deps);
+  if (!res.ok) return { error: res.error };
+  if (!httpOk(res.status)) return { error: `could not fetch ${url} (HTTP ${res.status})` };
   let raw;
   try {
-    raw = await res.json();
+    raw = JSON.parse(res.text);
   } catch {
     return { error: `${url} did not parse as JSON` };
   }
@@ -972,19 +1033,17 @@ async function resolveHead(source, deps) {
     source.path
   )}&per_page=1`;
   let why = "the commit listing did not return a sha";
-  try {
-    const res = await deps.fetch(url, { headers: headers(deps) });
-    if (res.ok) {
-      const body = await readJson(res);
-      if (Array.isArray(body) && body.length > 0) {
-        const revision = commitFrom(body[0]);
-        if (revision) return revision;
-      }
-    } else {
-      why = `the commit listing returned HTTP ${res.status}`;
+  const res = await getBody(url, { headers: headers(deps) }, deps);
+  if (!res.ok) {
+    why = res.error;
+  } else if (httpOk(res.status)) {
+    const body = parseJson(res.text);
+    if (Array.isArray(body) && body.length > 0) {
+      const revision = commitFrom(body[0]);
+      if (revision) return revision;
     }
-  } catch (e) {
-    why = `the commit listing could not be reached: ${e.message}`;
+  } else {
+    why = `the commit listing returned HTTP ${res.status}`;
   }
   const branch = defaultBranch(source);
   return {
