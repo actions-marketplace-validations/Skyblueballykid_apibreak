@@ -230,6 +230,7 @@ function escapeHtml(text) {
 function endpointKey(e) {
   return `${e.method} ${e.path}`;
 }
+var PATH_ITEM_OWN_KEYS = /* @__PURE__ */ new Set([...METHODS.map((m) => m.toLowerCase()), "parameters", "servers"]);
 function indexSpec(raw) {
   const operations = /* @__PURE__ */ new Map();
   const version = typeof raw?.info?.version === "string" ? raw.info.version : void 0;
@@ -240,12 +241,34 @@ function indexSpec(raw) {
   if (!paths || typeof paths !== "object" || Array.isArray(paths)) {
     return { raw, operations, version, unreadable: "the specification has no `paths` object" };
   }
-  for (const [path, item] of Object.entries(paths)) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+  for (const [path, rawItem] of Object.entries(paths)) {
+    if (!path.startsWith("/")) continue;
+    if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) continue;
+    let pathItem = rawItem;
+    if (typeof rawItem.$ref === "string") {
+      const resolved = deref(rawItem, raw, /* @__PURE__ */ new Set(), 0, PATH_ITEM_OWN_KEYS);
+      if (!resolved.ok) {
+        return {
+          raw,
+          operations,
+          version,
+          unreadable: `the path item "${path}" could not be resolved: ${resolved.reason}`
+        };
+      }
+      if (!resolved.node || typeof resolved.node !== "object" || Array.isArray(resolved.node)) {
+        return {
+          raw,
+          operations,
+          version,
+          unreadable: `the path item "${path}" could not be resolved: it does not resolve to an object`
+        };
+      }
+      pathItem = resolved.node;
+    }
     for (const method of METHODS) {
-      const op = item[method.toLowerCase()];
+      const op = pathItem[method.toLowerCase()];
       if (!op || typeof op !== "object" || Array.isArray(op)) continue;
-      operations.set(`${method} ${path}`, { raw: op, pathItem: item, deprecated: op.deprecated === true });
+      operations.set(`${method} ${path}`, { raw: op, pathItem, deprecated: op.deprecated === true });
     }
   }
   if (operations.size === 0) {
@@ -255,10 +278,41 @@ function indexSpec(raw) {
 }
 var MAX_REF_DEPTH = 8;
 var MAX_SHAPE_DEPTH = 8;
-function deref(node, doc, seen = /* @__PURE__ */ new Set(), depth = 0) {
+var STRUCTURAL_SIBLINGS = /* @__PURE__ */ new Set([
+  "properties",
+  "items",
+  "allOf",
+  "anyOf",
+  "oneOf",
+  "not",
+  "required",
+  "additionalProperties",
+  "patternProperties",
+  "type",
+  "enum",
+  "const",
+  "dependentSchemas",
+  "dependentRequired",
+  "if",
+  "then",
+  "else",
+  "prefixItems",
+  "contains",
+  "propertyNames",
+  "unevaluatedProperties",
+  "unevaluatedItems"
+]);
+function deref(node, doc, seen = /* @__PURE__ */ new Set(), depth = 0, refuseSiblings) {
   if (!node || typeof node !== "object" || Array.isArray(node)) return { ok: true, node };
   const ref = node.$ref;
   if (typeof ref !== "string") return { ok: true, node };
+  const siblings = Object.keys(node).filter((k) => k !== "$ref" && (STRUCTURAL_SIBLINGS.has(k) || refuseSiblings?.has(k))).sort();
+  if (siblings.length > 0) {
+    return {
+      ok: false,
+      reason: `"${ref}" has sibling keywords (${siblings.join(", ")}) that this check does not merge`
+    };
+  }
   if (depth >= MAX_REF_DEPTH) return { ok: false, reason: `a $ref chain runs deeper than ${MAX_REF_DEPTH} links` };
   if (!ref.startsWith("#/")) return { ok: false, reason: `"${ref}" points outside this document` };
   if (seen.has(ref)) return { ok: false, reason: `"${ref}" is circular` };
@@ -270,7 +324,7 @@ function deref(node, doc, seen = /* @__PURE__ */ new Set(), depth = 0) {
     if (!Object.prototype.hasOwnProperty.call(cur, seg)) return { ok: false, reason: `"${ref}" does not resolve` };
     cur = cur[seg];
   }
-  return deref(cur, doc, seen, depth + 1);
+  return deref(cur, doc, seen, depth + 1, refuseSiblings);
 }
 function stableKey(value) {
   const seen = /* @__PURE__ */ new WeakSet();
