@@ -1,0 +1,23 @@
+{
+  "name": "apibreak-source",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Source, tests and build for the apibreak CLI (cli/) and the GitHub Action (action.yml, dist/index.js).",
+  "scripts": {
+    "test": "node --import tsx --test cli/test/*.test.ts",
+    "build": "node cli/scripts/build.mjs",
+    "apibreak": "node --import tsx cli/src/bin.ts"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.13",
+    "typescript": "^5"
+  }
+}

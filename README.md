@@ -61,12 +61,59 @@ npx apibreak check --manifest apibreak.json
 Or add it to a project with `npm i -D apibreak`. The package is one bundled
 file, a README and a licence — **no dependencies**, **no install scripts** —
 and it needs Node 20 or newer. It is early access at
-[`apibreak@0.1.0`](https://www.npmjs.com/package/apibreak), two vendors, and
+[`apibreak@0.3.2`](https://www.npmjs.com/package/apibreak), two vendors, and
 the interface may still change.
 
 The Action wraps this same check and adds the annotations and job summary
 above. Everything below — the manifest, what is detected, the exit codes —
 is the same either way.
+
+## `apibreak diff` and `apibreak docs`
+
+The npm package is one CLI with three commands; the Action above only wraps
+`check`. The other two run standalone, with no manifest and no vendor
+registry:
+
+- **`apibreak diff <old> <new>`** compares any two OpenAPI 3.x or Swagger 2.0
+  documents directly — local files or URLs, JSON or YAML. `apibreak diff
+  --base-ref <git-ref> <path>` compares a file in your working tree against
+  the same path read from a git ref, which is what makes it usable as a PR
+  check on your own specification.
+- **`apibreak docs --spec openapi.yaml`** reads the API calls in your own
+  hand-written Markdown/MDX docs (curl, raw HTTP, `fetch()`, Python
+  `requests`, inline `GET /v1/things/{id}`) and reports the ones your spec
+  does not support. A worked run against a real project's docs is at
+  [apibreak.dev/docs-check](https://apibreak.dev/docs-check).
+
+Both are published in the same package as `check`; [`npm/README.md`](npm/README.md)
+has their full usage, flags and exit codes.
+
+## Source
+
+This repository holds two things: the GitHub Action above, and — in `cli/` —
+the source of the `apibreak` CLI it wraps.
+
+```
+cli/src/      the engine: manifest, spec index, diff, report, fetch; the
+              check/diff/docs entry points; load-spec, match-endpoints,
+              yaml, glob
+cli/test/     node:test suites covering the above (382 tests)
+cli/fixtures/ fixtures the tests and the worked docs-check example use
+cli/scripts/  build.mjs — the esbuild bundle that produces cli/dist/apibreak.js
+npm/          the published package's own package.json, README and licence,
+              kept here for reference: this is what `npm i -D apibreak` installs
+```
+
+Build and test it from source:
+
+```
+npm ci
+npm test
+npm run build   # bundles cli/src/bin.ts to cli/dist/apibreak.js
+```
+
+Neither step needs any environment variables. `apibreak check`, `diff` and
+`docs` need no vendor credentials at runtime either.
 
 ## `apibreak.json`
 
@@ -190,7 +237,7 @@ threshold except `never`; `not compared` and `advisory` findings never fail.
 ## Status
 
 Early access, and honestly labelled as such: the Action and the CLI — published
-on npm as [`apibreak@0.1.0`](https://www.npmjs.com/package/apibreak) — are free
+on npm as [`apibreak@0.3.2`](https://www.npmjs.com/package/apibreak) — are free
 and always will be. A hosted version that emails you a weekly report without a
 CI job is proposed at $49/org/month — [apibreak.dev](https://apibreak.dev) has
 the worked example and the detail. No SLA, no real-time protection, and no

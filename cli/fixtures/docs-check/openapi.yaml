@@ -1,0 +1,89 @@
+openapi: 3.0.3
+info:
+  title: Acme API
+  version: 2.1.0
+servers:
+  - url: https://api.acme.test/v1
+paths:
+  /customers:
+    get:
+      parameters:
+        - { name: limit, in: query, schema: { type: integer } }
+        - { name: starting_after, in: query, schema: { type: string } }
+        - { name: email, in: query, deprecated: true, schema: { type: string } }
+      responses: { '200': { description: ok } }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CustomerCreate' }
+      responses: { '201': { description: created } }
+  /customers/{customer_id}:
+    parameters:
+      - { name: customer_id, in: path, required: true, schema: { type: string } }
+    get:
+      responses: { '200': { description: ok } }
+    delete:
+      responses: { '204': { description: deleted } }
+  /customers/me:
+    get:
+      responses: { '200': { description: ok } }
+  /customers/{customer_id}/sources:
+    post:
+      deprecated: true
+      parameters:
+        - { name: customer_id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { token: { type: string } } }
+      responses: { '200': { description: ok } }
+  /charges:
+    post:
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [amount, currency]
+              properties:
+                amount: { type: integer }
+                currency: { type: string }
+                metadata: { type: object, additionalProperties: { type: string } }
+      responses: { '200': { description: ok } }
+  /events:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true, properties: { type: { type: string } } }
+      responses: { '202': { description: accepted } }
+  /search:
+    get:
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: filter, in: query, style: deepObject, schema: { type: object, properties: { status: { type: string } } } }
+      responses: { '200': { description: ok } }
+  /payments:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - { type: object, required: [amount, card], properties: { amount: { type: integer }, card: { type: string } } }
+                - { type: object, required: [amount, iban], properties: { amount: { type: integer }, iban: { type: string } } }
+      responses: { '200': { description: ok } }
+components:
+  schemas:
+    CustomerCreate:
+      type: object
+      required: [email, id]
+      properties:
+        id: { type: string, readOnly: true }
+        email: { type: string }
+        name: { type: string }
+        legacy_code: { type: string, deprecated: true }
+  securitySchemes:
+    key: { type: apiKey, in: query, name: api_key }

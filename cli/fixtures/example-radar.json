@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "integrations": [
+    {
+      "vendor": "github",
+      "baseline": "2026-03-19",
+      "endpoints": [
+        "GET /orgs/{org}/copilot/metrics",
+        "GET /repos/{owner}/{repo}/dependency-graph/sbom",
+        "GET /repos/{owner}/{repo}/issues",
+        "POST /repos/{owner}/{repo}/issues",
+        "GET /orgs/{org}/members",
+        "POST /repos/{owner}/{repo}/check-runs"
+      ]
+    },
+    {
+      "vendor": "stripe",
+      "baseline": "2025-08-19",
+      "endpoints": [
+        "POST /v1/promotion_codes",
+        "POST /v1/payment_intents",
+        "POST /v1/checkout/sessions",
+        "GET /v1/invoices"
+      ]
+    }
+  ]
+}

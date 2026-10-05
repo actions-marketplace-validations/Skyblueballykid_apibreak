@@ -1,0 +1,61 @@
+import { Tabs } from './tabs'
+
+# Advanced
+
+Local development runs at localhost:
+
+```bash
+curl http://localhost:3000/v1/customers/cus_42
+```
+
+This guide also calls GitHub: `GET https://api.github.com/repos/{owner}/{repo}`.
+
+```bash
+curl "$ENDPOINT"
+```
+
+```js
+await fetch(url, options)
+```
+
+<!-- apibreak-ignore -->
+```bash
+curl https://api.acme.test/v1/not-a-real-endpoint
+```
+
+{/* apibreak-ignore */}
+Legacy: `GET /v1/old-thing`.
+
+Charge a card (form encoded):
+
+```bash
+curl https://api.acme.test/v1/charges \
+  -u sk_test_123: \
+  -d amount=2000 \
+  -d currency=usd \
+  -d "metadata[order_id]"=6735
+```
+
+Events accept any properties:
+
+```bash
+curl -X POST https://api.acme.test/v1/events/ -d '{"type": "ping", "anything": true}'
+```
+
+Pay by IBAN:
+
+```python
+requests.post("https://api.acme.test/v1/payments", json={"amount": 100, "iban": "DE00"})
+```
+
+Search with a filter:
+
+```bash
+curl -G https://api.acme.test/v1/search --data-urlencode "q=ada" --data-urlencode "filter[status]=active"
+```
+
+Current user: `GET https://api.acme.test/v1/customers/me`.
+
+```bash
+curl -X POST https://api.acme.test/v1/customers -d @customer.json -H 'Content-Type: application/json'
+```

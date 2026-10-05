@@ -1,0 +1,44 @@
+{
+  "name": "apibreak",
+  "version": "0.3.2",
+  "description": "Early access. A CI check that compares the vendor OpenAPI specifications you depend on against a baseline you pin and reports only the changes that touch the endpoints you declared; a diff of any two OpenAPI documents; and a check of the API calls in your hand-written docs against your own spec. No vendor credentials required, nothing uploaded.",
+  "keywords": [
+    "openapi",
+    "swagger",
+    "api",
+    "breaking-changes",
+    "api-diff",
+    "ci",
+    "docs",
+    "documentation",
+    "lint",
+    "integration",
+    "stripe",
+    "github"
+  ],
+  "homepage": "https://apibreak.dev",
+  "bugs": {
+    "url": "https://github.com/Skyblueballykid/apibreak/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Skyblueballykid/apibreak.git"
+  },
+  "license": "MIT",
+  "author": "Thomas Kalnik",
+  "type": "module",
+  "bin": {
+    "apibreak": "dist/apibreak.js"
+  },
+  "files": [
+    "dist/apibreak.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
